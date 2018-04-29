@@ -11,21 +11,36 @@ tf.logging.set_verbosity(tf.logging.INFO)
 def cnn_model_fn(features, labels, mode):
     """Model function for CNN."""
     input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
+
+    channels = 10
     conv = tf.layers.conv2d(
         inputs=input_layer,
-        filters=32,
+        filters=channels,
         kernel_size=[5, 5],
         padding="same",
         activation=tf.nn.relu)
+
+    skip = tf.layers.conv2d(
+        inputs=input_layer,
+        filters=channels,
+        kernel_size=[1, 1],
+        padding="same",
+        activation=tf.nn.relu
+    )
 
     for i in range(10):
         with tf.variable_scope('iteration', reuse=tf.AUTO_REUSE):
             conv = tf.layers.conv2d(
                 inputs=conv,
-                filters=32,
+                filters=channels,
                 kernel_size=[5, 5],
                 padding="same",
-                activation=tf.nn.relu)
+                activation=tf.nn.relu
+            )
+            conv += skip
+            tf.layers.dropout(
+                inputs=conv, rate=0.4,
+                training=mode == tf.estimator.ModeKeys.TRAIN)
 
     flat = tf.layers.flatten(conv)
 
@@ -89,7 +104,7 @@ def main(unused_argv):
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
         x={"x": train_data},
         y=train_labels,
-        batch_size=100,
+        batch_size=1000,
         num_epochs=None,
         shuffle=True)
     mnist_classifier.train(
