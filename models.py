@@ -9,14 +9,7 @@ def iterated_model_unrolled(features, labels, mode, params):
 
     input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
 
-    conv = tf.layers.conv2d(
-        inputs=input_layer,
-        filters=channels,
-        kernel_size=[5, 5],
-        padding="same",
-        activation=tf.nn.relu)
-
-    skip = tf.layers.conv2d(
+    adapted_to_channels = tf.layers.conv2d(
         inputs=input_layer,
         filters=channels,
         kernel_size=[1, 1],
@@ -24,21 +17,23 @@ def iterated_model_unrolled(features, labels, mode, params):
         activation=tf.nn.relu
     )
 
+    accumulator = adapted_to_channels
+
     for i in range(iterations):
         with tf.variable_scope('iteration', reuse=tf.AUTO_REUSE):
-            conv = tf.layers.conv2d(
-                inputs=conv,
+            accumulator = tf.layers.conv2d(
+                inputs=accumulator,
                 filters=channels,
                 kernel_size=[5, 5],
                 padding="same",
                 activation=tf.nn.relu
             )
-            conv += skip
+            accumulator += adapted_to_channels
             tf.layers.dropout(
-                inputs=conv, rate=0.4,
+                inputs=accumulator, rate=0.4,
                 training=mode == tf.estimator.ModeKeys.TRAIN)
 
-    flat = tf.layers.flatten(conv)
+    flat = tf.layers.flatten(accumulator)
 
     dense = tf.layers.dense(inputs=flat, units=1024,
                             activation=tf.nn.relu)
@@ -85,20 +80,13 @@ def iterated_model_while_op(features, labels, mode, params):
 
     input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
 
-    conv = tf.layers.conv2d(
-        inputs=input_layer,
-        filters=channels,
-        kernel_size=[5, 5],
-        padding="same",
-        activation=tf.nn.relu)
-
-    skip = tf.layers.conv2d(
+    adapted_to_channels = tf.layers.conv2d(
         inputs=input_layer,
         filters=channels,
         kernel_size=[1, 1],
-        padding="same",
-        activation=tf.nn.relu
-    )
+        padding="same")
+
+    accumulator = adapted_to_channels
 
     def condition(i, n, _):
         return tf.less(i, n)
@@ -112,19 +100,19 @@ def iterated_model_while_op(features, labels, mode, params):
                 padding="same",
                 activation=tf.nn.relu
             )
-            input_ += skip
+            input_ += adapted_to_channels
             tf.layers.dropout(
                 inputs=input_, rate=0.4,
                 training=mode == tf.estimator.ModeKeys.TRAIN)
         return [tf.add(i, 1), n, input_]
 
-    _, _, conv = tf.while_loop(
+    _, _, accumulator = tf.while_loop(
         condition,
         loop,
-        [tf.constant(0), iterations, conv],
+        [tf.constant(0), iterations, accumulator],
     )
 
-    flat = tf.layers.flatten(conv)
+    flat = tf.layers.flatten(accumulator)
 
     dense = tf.layers.dense(inputs=flat, units=1024,
                             activation=tf.nn.relu)
